@@ -11,6 +11,7 @@ using ImageCircle.Forms.Plugin.Droid;
 using System;
 using System.Diagnostics;
 using System.ComponentModel;
+using Refractored.Controls;
 
 [assembly: ExportRenderer(typeof(ImageCircle.Forms.Plugin.Abstractions.CircleImage), typeof(ImageCircleRenderer))]
 namespace ImageCircle.Forms.Plugin.Droid
@@ -19,7 +20,47 @@ namespace ImageCircle.Forms.Plugin.Droid
     /// ImageCircle Implementation
     /// </summary>
     [Preserve(AllMembers = true)]
-    public class ImageCircleRenderer : ImageRenderer
+    public class ImageCircleRenderer : ViewRenderer<Image, CircleImageView>
+    {
+
+        /// <summary>
+        /// Used for registration with dependency service
+        /// </summary>
+        public async static void Init()
+        {
+            var temp = DateTime.Now;
+        }
+
+        CircleImageView circleImage;
+        protected override void OnElementChanged(ElementChangedEventArgs<Image> e)
+        {
+            base.OnElementChanged(e);
+            if (e.OldElement != null || Element == null)
+                return;
+
+            circleImage = new CircleImageView(Xamarin.Forms.Forms.Context);
+            SetupImage();
+            SetNativeControl(circleImage);
+        }
+
+        private void SetupImage()
+        {
+            circleImage.BorderColor = ((ImageCircle.Forms.Plugin.Abstractions.CircleImage)Element).BorderColor.ToAndroid();
+            circleImage.BorderWidth = ((ImageCircle.Forms.Plugin.Abstractions.CircleImage)Element).BorderThickness;
+        }
+
+        protected override void OnElementPropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            base.OnElementPropertyChanged(sender, e);
+            if (e.PropertyName == ImageCircle.Forms.Plugin.Abstractions.CircleImage.BorderColorProperty.PropertyName ||
+              e.PropertyName == ImageCircle.Forms.Plugin.Abstractions.CircleImage.BorderThicknessProperty.PropertyName)
+            {
+                SetupImage();
+                this.Invalidate();
+            }
+        }
+    }
+    /*public class ImageCircleRenderer : ImageRenderer
     {
         /// <summary>
         /// Used for registration with dependency service
@@ -108,5 +149,5 @@ namespace ImageCircle.Forms.Plugin.Droid
 
             return base.DrawChild(canvas, child, drawingTime);
         }
-    }
+    }*/
 }

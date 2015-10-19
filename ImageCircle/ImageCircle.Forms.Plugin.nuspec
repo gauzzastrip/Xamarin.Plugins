@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
    <metadata minClientVersion="2.8.1">
        <id>Xam.Plugins.Forms.ImageCircle</id>
-       <version>1.1.5</version>
+       <version>1.2.0-alpha1</version>
        <title>Image Circle Control Plugin for Xamarin.Forms</title>
        <authors>James Montemagno</authors>
        <owners>James Montemagno</owners>
@@ -17,9 +17,19 @@
          Built against:  1.5.0.6447
        </description>
        <summary>Use a Circle Image in your Xamarin.Forms projects! Ensure you call ImageCircleRenderer.Init() on each platform!</summary>
-       <tags>xamarin, pcl, xam.pcl, windows phone, winphone, wp8, android, xamarin.forms, ios</tags>
-       <dependencies>
-         <dependency id="Xamarin.Forms" version="1.5.0.6447" />
+       <tags>circleimage, circle image, image circle, circle, xamarin, pcl, xam.pcl, windows phone, winphone, wp8, android, xamarin.forms, ios</tags>
+     <releaseNotes>
+       [1.2.0-alpha1]
+       -Integrate new Android circle images (needs testing)
+     </releaseNotes>
+         <dependencies>
+         <group>
+          <dependency id="Xamarin.Forms" version="1.5.0.6447" />
+         </group>
+         <group targetFramework="MonoAndroid10">
+          <dependency id="Xamarin.Forms" version="1.5.0.6447" />
+          <dependency id="Refractored.Controls.CircleImageView" version="1.0.1" />
+         </group>
        </dependencies>
    </metadata>
    <files>
