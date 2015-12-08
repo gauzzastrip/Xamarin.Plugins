@@ -143,7 +143,7 @@ namespace Plugin.Geolocator
             return tcs.Task;
         }
         /// <inheritdoc/>
-        public void StartListening(int minTime, double minDistance, bool includeHeading = false)
+        public Task<bool> StartListeningAsync(int minTime, double minDistance, bool includeHeading = false)
         {
             if (minTime < 0)
                 throw new ArgumentOutOfRangeException("minTime");
@@ -159,22 +159,26 @@ namespace Plugin.Geolocator
             loc.MovementThreshold = minDistance;
             loc.PositionChanged += OnLocatorPositionChanged;
             loc.StatusChanged += OnLocatorStatusChanged;
+
+            return Task.FromResult(true);
         }
         /// <inheritdoc/>
-        public void StopListening()
+        public Task<bool> StopListeningAsync()
         {
             if (!isListening)
-                return;
+                return Task.FromResult(true);
 
             locator.PositionChanged -= OnLocatorPositionChanged;
             isListening = false;
+
+            return Task.FromResult(true);
         }
 
         private bool isListening;
         private double desiredAccuracy;
         private Windows.Devices.Geolocation.Geolocator locator = new Windows.Devices.Geolocation.Geolocator();
 
-        private void OnLocatorStatusChanged(Windows.Devices.Geolocation.Geolocator sender, StatusChangedEventArgs e)
+        private async void OnLocatorStatusChanged(Windows.Devices.Geolocation.Geolocator sender, StatusChangedEventArgs e)
         {
             GeolocationError error;
             switch (e.Status)
@@ -193,7 +197,7 @@ namespace Plugin.Geolocator
 
             if (isListening)
             {
-                StopListening();
+                await StopListeningAsync();
                 OnPositionError(new PositionErrorEventArgs(error));
             }
 
