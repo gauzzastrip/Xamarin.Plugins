@@ -24,6 +24,14 @@ using Android.OS;
 using Android.Provider;
 using Plugin.Media.Abstractions;
 using Plugin.Permissions;
+using Android.Graphics;
+using Android.Media;
+using Android.Content.Res;
+using Android.Util;
+using Android.Views;
+using Android.Runtime;
+using Android.Database;
+
 
 namespace Plugin.Media
 {
@@ -245,7 +253,7 @@ namespace Plugin.Media
         {
             if (options == null)
                 throw new ArgumentNullException("options");
-            if (Path.IsPathRooted(options.Directory))
+            if (System.IO.Path.IsPathRooted(options.Directory))
                 throw new ArgumentException("options.Directory must be a relative path", "options");
         }
 
@@ -261,9 +269,9 @@ namespace Plugin.Media
             {
                 pickerIntent.PutExtra(MediaPickerActivity.ExtraPath, options.Directory);
                 pickerIntent.PutExtra(MediaStore.Images.ImageColumns.Title, options.Name);
-
-
+		
                 var cameraOptions = (options as StoreCameraMediaOptions);
+
                 if (cameraOptions != null)
                     pickerIntent.PutExtra(MediaPickerActivity.ExtraSaveToAlbum, cameraOptions.SaveToAlbum);
 
@@ -276,6 +284,7 @@ namespace Plugin.Media
             }
             //pickerIntent.SetFlags(ActivityFlags.ClearTop);
             pickerIntent.SetFlags(ActivityFlags.NewTask);
+		
             return pickerIntent;
         }
 
@@ -298,6 +307,8 @@ namespace Plugin.Media
             if (Interlocked.CompareExchange(ref this.completionSource, ntcs, null) != null)
                 throw new InvalidOperationException("Only one operation can be active at a time");
 
+
+
             this.context.StartActivity(CreateMediaIntent(id, type, action, options));
 
             EventHandler<MediaPickedEventArgs> handler = null;
@@ -314,13 +325,137 @@ namespace Plugin.Media
                     tcs.SetResult(null);
                 else if (e.IsCanceled)
                     tcs.SetResult(null);
-                else
+				else{
+					var wm = context.GetSystemService(Android.Content.Context.WindowService)
+						.JavaCast<IWindowManager>();
+					var d  = wm.DefaultDisplay;
+					Point size = new Point();
+					d.GetSize(size);
+					int height =size.Y;
+					int width = size.X;
+
+					LoadAndResizeBitmap(e.Media.Path, width,height);
                     tcs.SetResult(e.Media);
+				}
             };
 
             MediaPickerActivity.MediaPicked += handler;
 
             return ntcs.Task;
         }
+
+	
+	
+		private Bitmap LoadAndResizeBitmap(string fileName, int width, int height)
+		{
+			// First we get the the dimensions of the file on disk
+			BitmapFactory.Options options = new BitmapFactory.Options { InJustDecodeBounds = true };
+			BitmapFactory.DecodeFile (fileName, options);
+
+			// Next we calculate the ratio that we need to resize the image by
+			// in order to fit the requested dimensions.
+			int outHeight = options.OutHeight;
+			int outWidth = options.OutWidth;
+			int inSampleSize = 1;
+
+			if (outHeight > height || outWidth > width) {
+				inSampleSize = outWidth > outHeight
+					? outHeight / height
+					: outWidth / width;
+			}
+		
+			// Now we will load the image and have BitmapFactory resize it for us.
+			options.InSampleSize = inSampleSize;
+			options.InJustDecodeBounds = false;
+			Bitmap resizedBitmap = BitmapFactory.DecodeFile (fileName, options);
+
+			// Images are being saved in landscape, so rotate them back to portrait if they were taken in portrait
+			Matrix mtx = new Matrix ();
+			ExifInterface exif = new ExifInterface (fileName);
+			//exif.SetAttribute (ExifInterface.TagOrientation, ((int)orientation)));
+			//var orientation = (Android.Media.Orientation)exif.GetAttributeInt (ExifInterface.TagOrientation, (int)Android.Media.Orientation.Undefined);
+			//ExifInterface exif = new ExifInterface(fileName);
+			//int orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+			var orientation = (Android.Media.Orientation)exif.GetAttributeInt(ExifInterface.TagOrientation,(int) Android.Media.Orientation.Normal);
+
+			var test = exif.GetAttribute (ExifInterface.TagOrientation);
+			FileInfo f = new FileInfo (fileName);
+
+			Android.Net.Uri selectedImage = Android.Net.Uri.Parse(f.DirectoryName);
+
+
+			var otherotation = 0;
+			ICursor mediaCursor = context.ContentResolver.Query(selectedImage,
+				new String[] { "orientation", "date_added" },null, null,"date_added desc");
+			
+			if (mediaCursor != null && mediaCursor.Count !=0 ) {
+				while(mediaCursor.MoveToNext()){
+					otherotation = mediaCursor.GetInt(0);
+					break;
+				}
+			}
+
+			string[] orientationColumn = {MediaStore.Images.Media.InterfaceConsts.Orientation};
+			ICursor cur = context.ContentResolver.Query(selectedImage, orientationColumn, null, null, null);
+			int altOrientation = -1;
+			if (cur != null && cur.MoveToFirst()) {
+				altOrientation = cur.GetInt(cur.GetColumnIndex(orientationColumn[0]));
+			}  
+
+
+			var tmporientation = exif.GetAttribute (ExifInterface.TagOrientation);
+			Log.Debug("EXIF value", tmporientation);
+
+
+
+			switch (orientation) {
+			case Android.Media.Orientation.Undefined: // Nexus 7 landscape...
+				break;
+			case Android.Media.Orientation.Normal: // landscape
+				break;
+			case Android.Media.Orientation.FlipHorizontal:
+				break;
+			case Android.Media.Orientation.Rotate180:
+				mtx.PreRotate (180);
+				resizedBitmap = Bitmap.CreateBitmap (resizedBitmap, 0, 0, resizedBitmap.Width, resizedBitmap.Height, mtx, false);
+				mtx.Dispose ();
+				mtx = null;
+				break;
+			case Android.Media.Orientation.FlipVertical:
+				break;
+			case Android.Media.Orientation.Transpose:
+				break;
+			case Android.Media.Orientation.Rotate90: // portrait
+				mtx.PreRotate (90);
+				resizedBitmap = Bitmap.CreateBitmap (resizedBitmap, 0, 0, resizedBitmap.Width, resizedBitmap.Height, mtx, false);
+				mtx.Dispose ();
+				mtx = null;
+				break;
+			case Android.Media.Orientation.Transverse:
+				break;
+			case Android.Media.Orientation.Rotate270: // might need to flip horizontally too...
+				mtx.PreRotate (270);
+				resizedBitmap = Bitmap.CreateBitmap (resizedBitmap, 0, 0, resizedBitmap.Width, resizedBitmap.Height, mtx, false);
+				mtx.Dispose ();
+				mtx = null;
+				break;
+			default:
+				mtx.PreRotate (90);
+				resizedBitmap = Bitmap.CreateBitmap (resizedBitmap, 0, 0, resizedBitmap.Width, resizedBitmap.Height, mtx, false);
+				mtx.Dispose ();
+				mtx = null;
+				break;
+			}
+
+
+			return resizedBitmap;
+		}
+
+
+	
     }
+
+
+
+
 }

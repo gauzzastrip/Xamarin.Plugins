@@ -47,6 +47,14 @@ namespace Plugin.Media.Abstractions
             get;
             set;
         }
+		/// <summary>
+		/// Camera Orientation
+		/// </summary>
+		public int Orientation
+		{
+			get;
+			set;
+		}
     }
 
     /// <summary>
