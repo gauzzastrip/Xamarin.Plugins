@@ -87,6 +87,7 @@ namespace Plugin.Media
                 outState.PutString(ExtraPath, this.path.Path);
 
             base.OnSaveInstanceState(outState);
+		
         }
 
         /// <summary>
@@ -279,7 +280,7 @@ namespace Plugin.Media
                     return new MediaPickedEventArgs(requestCode, new MediaFileNotFoundException(originalPath));
             });
         }
-
+	
         /// <summary>
         /// OnActivity Result
         /// </summary>

@@ -31,6 +31,8 @@ using Android.Util;
 using Android.Views;
 using Android.Runtime;
 using Android.Database;
+using Java.Util.Regex;
+using Java.Lang;
 
 
 namespace Plugin.Media
@@ -107,7 +109,7 @@ namespace Plugin.Media
         {
             if (!IsCameraAvailable)
                 throw new NotSupportedException();
-
+			
             VerifyOptions(options);
 
             int id = GetRequestId();
@@ -334,7 +336,8 @@ namespace Plugin.Media
 					int height =size.Y;
 					int width = size.X;
 
-					LoadAndResizeBitmap(e.Media.Path, width,height);
+					var resizedBmp = LoadAndResizeBitmap(e.Media.Path, width,height);
+
                     tcs.SetResult(e.Media);
 				}
             };
@@ -350,7 +353,7 @@ namespace Plugin.Media
 		{
 			// First we get the the dimensions of the file on disk
 			BitmapFactory.Options options = new BitmapFactory.Options { InJustDecodeBounds = true };
-			BitmapFactory.DecodeFile (fileName, options);
+			Bitmap originalBitmap = BitmapFactory.DecodeFile (fileName, options);
 
 			// Next we calculate the ratio that we need to resize the image by
 			// in order to fit the requested dimensions.
@@ -378,15 +381,22 @@ namespace Plugin.Media
 			//int orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
 			var orientation = (Android.Media.Orientation)exif.GetAttributeInt(ExifInterface.TagOrientation,(int) Android.Media.Orientation.Normal);
 
-			var test = exif.GetAttribute (ExifInterface.TagOrientation);
-			FileInfo f = new FileInfo (fileName);
-
-			Android.Net.Uri selectedImage = Android.Net.Uri.Parse(f.DirectoryName);
-
-
+//			var test = exif.GetAttribute (ExifInterface.TagOrientation);
+//			FileInfo f = new FileInfo (fileName);
+			var javaFile = new Java.IO.File (fileName);
+			Android.Net.Uri selectedImage = Android.Net.Uri.FromFile(javaFile); //Android.Net.Uri.Parse(f.DirectoryName);
+			try{
+				selectedImage=	Android.Support.V4.Content.FileProvider.GetUriForFile(context.ApplicationContext, "com.logicbakery.nichelyprototype", javaFile);
+			}
+			catch(System.Exception ex){
+				var e = ex;
+			}
 			var otherotation = 0;
-			ICursor mediaCursor = context.ContentResolver.Query(selectedImage,
-				new String[] { "orientation", "date_added" },null, null,"date_added desc");
+			System.String[] columns = { MediaStore.Images.Media.InterfaceConsts.Data,MediaStore.Images.Media.InterfaceConsts.Orientation };//, MediaStore.Images.Media.InterfaceConsts.Orientation};
+		
+		
+			ICursor mediaCursor = 	Android.App.Application.Context.ContentResolver.Query (Android.Provider.MediaStore.Images.Media.ExternalContentUri,
+				                      columns, null, null, null);
 			
 			if (mediaCursor != null && mediaCursor.Count !=0 ) {
 				while(mediaCursor.MoveToNext()){
@@ -395,22 +405,24 @@ namespace Plugin.Media
 				}
 			}
 
-			string[] orientationColumn = {MediaStore.Images.Media.InterfaceConsts.Orientation};
-			ICursor cur = context.ContentResolver.Query(selectedImage, orientationColumn, null, null, null);
-			int altOrientation = -1;
-			if (cur != null && cur.MoveToFirst()) {
-				altOrientation = cur.GetInt(cur.GetColumnIndex(orientationColumn[0]));
-			}  
-
-
+			orientation = (Android.Media.Orientation)getOrientationFromMediaStore (Android.App.Application.Context, fileName);
+//
+//			string[] orientationColumn = {MediaStore.Images.Media.InterfaceConsts.Orientation};
+//			ICursor cur = 	Android.App.Application.Context.ContentResolver.Query(selectedImage, orientationColumn, null, null, null);
+//			int altOrientation = -1;
+//			if (cur != null && cur.MoveToFirst()) {
+//				altOrientation = cur.GetInt(cur.GetColumnIndex(orientationColumn[0]));
+//			}  
+	
 			var tmporientation = exif.GetAttribute (ExifInterface.TagOrientation);
 			Log.Debug("EXIF value", tmporientation);
 
 
-
+		//	if (orientation == Android.Media.Orientation.Undefined)
+	//			orientation == Android.Media.Orientation.;
 			switch (orientation) {
-			case Android.Media.Orientation.Undefined: // Nexus 7 landscape...
-				break;
+		//	case Android.Media.Orientation.Undefined: // Nexus 7 landscape...
+		//		break;
 			case Android.Media.Orientation.Normal: // landscape
 				break;
 			case Android.Media.Orientation.FlipHorizontal:
@@ -440,19 +452,59 @@ namespace Plugin.Media
 				mtx = null;
 				break;
 			default:
-				mtx.PreRotate (90);
+				mtx.PreRotate (180);
 				resizedBitmap = Bitmap.CreateBitmap (resizedBitmap, 0, 0, resizedBitmap.Width, resizedBitmap.Height, mtx, false);
 				mtx.Dispose ();
 				mtx = null;
+
 				break;
 			}
 
-
 			return resizedBitmap;
 		}
-
-
 	
+		private static int getOrientationFromMediaStore(Context context, System.String imagePath) {
+			Android.Net.Uri imageUri = getImageContentUri(context, imagePath);
+			if(imageUri == null) {
+				return -1;
+			}
+			//MediaStore.Images.Media.InterfaceConsts
+			System.String[] projection = {MediaStore.Images.ImageColumns.Orientation};
+			ICursor cursor = context.ContentResolver.Query(imageUri, projection, null, null, null);
+
+			int orientation = -1;
+			if (cursor != null && cursor.MoveToFirst()) {
+				orientation = cursor.GetInt(0);
+				cursor.Close();
+			}
+
+			return orientation;
+		}
+
+		private static Android.Net.Uri getImageContentUri(Context context, System.String imagePath) {
+			System.String[] projection = new System.String[] {MediaStore.Images.Media.InterfaceConsts.Id};
+			var selection = MediaStore.Images.Media.InterfaceConsts.Data + "=? ";
+			System.String[] selectionArgs = new System.String[]{imagePath};
+			ICursor cursor = context.ContentResolver.Query(Android.Provider.MediaStore.Images.Media.ExternalContentUri, projection, 
+				selection, selectionArgs, null);
+
+			if (cursor != null && cursor.MoveToFirst()) {
+				int imageId = cursor.GetInt(0);
+				cursor.Close();
+
+				return Android.Net.Uri.WithAppendedPath(Android.Provider.MediaStore.Images.Media.ExternalContentUri, Integer.ToString(imageId));
+			} 
+
+			if (new Java.IO.File(imagePath).Exists()) {
+				ContentValues values = new ContentValues();
+				values.Put(MediaStore.Images.Media.InterfaceConsts.Data, imagePath);
+
+				return  context.ContentResolver.Insert(
+					MediaStore.Images.Media.ExternalContentUri, values);
+			} 
+
+			return null;
+		}
     }
 
 
