@@ -36,6 +36,8 @@ namespace Plugin.Media.Abstractions
         /// </summary>
         bool IsPickVideoSupported { get; }
 
+		int Orientation { get; set;}
+
         /// <summary>
         /// Picks a photo from the default gallery
         /// </summary>
